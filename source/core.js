@@ -31,49 +31,24 @@ let WebDB = class {
 
     this.database = openDatabase(dbcon.name, dbcon.version, dbcon.description, 2 * 1024 * 1024, dbcon.initialize);
 
-    this._transactions = {};
-    this._transactionIdentifier = 0;
+    this.getTables();
 
-    this._getTables();
-
-    return;
+    return this.ready = true;
   };
 
   getName() {
     return this.databaseName;
   }
 
-  _identifyTransaction() {
-    return this._transactionIdentifier = this._transactionIdentifier + 1;
-  };
+  getTables() {
+    let id = this.identifyTransaction();
 
-  _transaction(txConfig) {
-    this.database.transaction((transaction) => {
-
-      transaction.executeSql(txConfig.statement, [], (transaction, result) => {
-        this._transactions[txConfig.id].apply(this, ["success", transaction, result]);
-      }, (transaction, result) => {
-        this._transactions[txConfig.id].apply(this, ["error", transaction, result]);
-      });
-
-    });
-
-    return this;
-  };
-
-  _done(id, callback) {
-    return this._transactions[id] = callback;
-  };
-
-  _getTables() {
-    let id = this._identifyTransaction();
-
-    this._transaction({
+    this.transaction({
       id: id,
       statement: `SELECT tbl_name, sql from sqlite_master WHERE type='table'`
     });
 
-    this._done(id, (status, transaction, result) => {
+    this.done(id, (status, transaction, result) => {
       if (status === "error")
         return console.error("Could not retrieve existing tables from database", result);
 
@@ -87,10 +62,94 @@ let WebDB = class {
           this[name] = new WebDB.dbTable(this, name);
 
         tableCount = tableCount + 1;
-      }
+      };
     });
 
     return this;
-  }
+  };
 
+  createTable(name, configuration) {
+    let createTable = () => {
+
+      if (configuration.columns == null)
+        return console.error("WebDB.createTable requires `configuration.columns` configuration")
+
+      let columns = [];
+      Object.keys(configuration.columns).forEach((key) => {
+        columns.push(`${key} ${configuration.columns[key].toUpperCase()}`);
+      });
+
+      if (configuration.autoIndexID && configuration.autoIndexID !== false)
+        columns.push("_id INTEGER PRIMARY KEY");
+
+      let txConfig = {
+        id: this.identifyTransaction(),
+        statement: `
+          CREATE TABLE IF NOT EXISTS
+          ${name}
+          (${columns.join(",")})
+        `
+      };
+
+      txConfig.statement = txConfig.statement
+        .replace(/\n/g, " ")     // Replace line breaks with spaces
+        .replace(/\s{2,}/g, " ") // Replace multiple spaces with single space
+        .replace(/^ | $/g, "");  // Remove first and last space in query
+
+      this.transaction(txConfig);
+
+      this.done(txConfig.id, (status, transaction, result) => {
+        if (status === "error" && configuration.error != null)
+          return configuration.error(result);
+
+        if (status === "success") {
+          this.getTables();
+          if (configuration.success != null)
+            configuration.success(result);
+          return this[name];
+        };
+      });
+
+    };
+
+    if (configuration.overwrite) {
+      let id = this.identifyTransaction();
+
+      this.transaction({
+        id: id,
+        statement: "DROP TABLE IF EXISTS ${name}"
+      });
+
+      this.done(dropID, createTable);
+    } else {
+      createTable();
+    };
+  };
+
+};
+
+WebDB.prototype.transactions = {};
+
+WebDB.prototype.transactionIdentifier = 0;
+
+WebDB.prototype.identifyTransaction = function() {
+  return this.transactionIdentifier = this.transactionIdentifier + 1;
+};
+
+WebDB.prototype.transaction = function(txConfig) {
+  this.database.transaction((transaction) => {
+
+    transaction.executeSql(txConfig.statement, [], (transaction, result) => {
+      this.transactions[txConfig.id].apply(this, ["success", transaction, result]);
+    }, (transaction, result) => {
+      this.transactions[txConfig.id].apply(this, ["error", transaction, result]);
+    });
+
+  });
+
+  return this;
+};
+
+WebDB.prototype.done = function(id, callback) {
+  return this.transactions[id] = callback;
 };
