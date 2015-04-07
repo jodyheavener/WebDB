@@ -1,6 +1,6 @@
 WebDB.Row = class {
 
-  constructor(database, row) {
+  constructor(database, rowQuery) {
     this.database = database;
 
     return {row: "yes"};
