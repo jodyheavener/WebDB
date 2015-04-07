@@ -1,4 +1,4 @@
-WebDB.dbTable = class {
+WebDB.Table = class {
 
   constructor(database, tableName) {
     this.database = database;
@@ -23,7 +23,7 @@ WebDB.dbTable = class {
       while (rowCount < rows.length) {
         let row = rows.item(rowCount);
 
-        this.rows.push(new WebDB.dbRow(this.database, row));
+        this.rows.push(new WebDB.Row(this.database, row));
 
         rowCount = rowCount + 1;
       };

@@ -59,7 +59,7 @@ let WebDB = class {
         let name = table.tbl_name;
 
         if (name !== "__WebKitDatabaseInfoTable__" && !this[name])
-          this[name] = new WebDB.dbTable(this, name);
+          this[name] = new WebDB.Table(this, name);
 
         tableCount = tableCount + 1;
       };

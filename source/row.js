@@ -1,4 +1,4 @@
-WebDB.dbRow = class {
+WebDB.Row = class {
 
   constructor(database, row) {
     this.database = database;
