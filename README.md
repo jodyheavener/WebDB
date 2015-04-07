@@ -49,12 +49,3 @@ myDB.createTable("someKindaTable", {
   }
 });
 ```
-
-### .getTable()
-Retrieves a table by name
-
-_Not complete_
-
-```javascript
-myDB.getTable("someKindaTable");
-```

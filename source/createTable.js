@@ -1,10 +1,12 @@
 /**
+ * METHOD
  * Creates a new Table
- * *name          | String          | Name of table to creater
- * *configuration | Object          | Table configuration
- *    overwrite   | Boolean (false) | Should overwrite table if it exists
- *    autoIndexID | Boolean (true)  | Automatically create a primary key _id column
- *   *columns     | Object          | Key value pairs of column name and types
+ *
+ * * name          | String          | Name of table to creater
+ * * configuration | Object          | Table configuration
+ *     overwrite   | Boolean (false) | Should overwrite table if it exists
+ *     autoIndexID | Boolean (true)  | Automatically create a primary key _id column
+ *   * columns     | Object          | Key value pairs of column name and types
  *      Name of column | String : SQL qualified type value | String
  */
 
@@ -47,7 +49,7 @@ WebDB.prototype.createTable = function(name, configuration) {
         this._getTables();
         if (configuration.success != null)
           configuration.success(result);
-        return this.getTable(name);
+        return this[name];
       }
     });
 

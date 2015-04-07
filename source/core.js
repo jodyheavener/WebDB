@@ -35,6 +35,8 @@ let WebDB = class {
     this._transactionIdentifier = 0;
 
     this._getTables();
+
+    return;
   };
 
   getName() {
@@ -55,10 +57,12 @@ let WebDB = class {
       });
 
     });
+
+    return this;
   };
 
   _done(id, callback) {
-    this._transactions[id] = callback;
+    return this._transactions[id] = callback;
   };
 
   _getTables() {
@@ -69,8 +73,8 @@ let WebDB = class {
       statement: `SELECT tbl_name, sql from sqlite_master WHERE type='table'`
     });
 
-    this._done(id, function(status, transaction, result){
-      if (status == "fail")
+    this._done(id, (status, transaction, result) => {
+      if (status === "error")
         return console.error("Could not retrieve existing tables from database", result);
 
       let tables = result.rows;
@@ -78,12 +82,15 @@ let WebDB = class {
       while (tableCount < tables.length) {
         let table = tables.item(tableCount);
         let name = table.tbl_name;
-        if (name !== "__WebKitDatabaseInfoTable__" && !this[name])
 
-          this[name] = this._getTable.bind({tableName: name, database: this});
+        if (name !== "__WebKitDatabaseInfoTable__" && !this[name])
+          this[name] = new WebDB.dbTable(this, name);
+
         tableCount = tableCount + 1;
       }
     });
+
+    return this;
   }
 
 };

@@ -39,6 +39,8 @@ var WebDB = (function () {
     this._transactionIdentifier = 0;
 
     this._getTables();
+
+    return;
   };
 
   _createClass(_class, {
@@ -64,15 +66,19 @@ var WebDB = (function () {
             _this._transactions[txConfig.id].apply(_this, ["error", transaction, result]);
           });
         });
+
+        return this;
       }
     },
     _done: {
       value: function _done(id, callback) {
-        this._transactions[id] = callback;
+        return this._transactions[id] = callback;
       }
     },
     _getTables: {
       value: function _getTables() {
+        var _this = this;
+
         var id = this._identifyTransaction();
 
         this._transaction({
@@ -81,17 +87,21 @@ var WebDB = (function () {
         });
 
         this._done(id, function (status, transaction, result) {
-          if (status == "fail") return console.error("Could not retrieve existing tables from database", result);
+          if (status === "error") return console.error("Could not retrieve existing tables from database", result);
 
           var tables = result.rows;
           var tableCount = 0;
           while (tableCount < tables.length) {
             var table = tables.item(tableCount);
             var _name = table.tbl_name;
-            if (_name !== "__WebKitDatabaseInfoTable__" && !this[_name]) this[_name] = this._getTable.bind({ tableName: _name, database: this });
+
+            if (_name !== "__WebKitDatabaseInfoTable__" && !_this[_name]) _this[_name] = new WebDB.dbTable(_this, _name);
+
             tableCount = tableCount + 1;
           }
         });
+
+        return this;
       }
     }
   });
@@ -100,12 +110,14 @@ var WebDB = (function () {
 })();
 
 /**
+ * METHOD
  * Creates a new Table
- * *name          | String          | Name of table to creater
- * *configuration | Object          | Table configuration
- *    overwrite   | Boolean (false) | Should overwrite table if it exists
- *    autoIndexID | Boolean (true)  | Automatically create a primary key _id column
- *   *columns     | Object          | Key value pairs of column name and types
+ *
+ * * name          | String          | Name of table to creater
+ * * configuration | Object          | Table configuration
+ *     overwrite   | Boolean (false) | Should overwrite table if it exists
+ *     autoIndexID | Boolean (true)  | Automatically create a primary key _id column
+ *   * columns     | Object          | Key value pairs of column name and types
  *      Name of column | String : SQL qualified type value | String
  */
 
@@ -140,7 +152,7 @@ WebDB.prototype.createTable = function (name, configuration) {
       if (status === "success") {
         _this._getTables();
         if (configuration.success != null) configuration.success(result);
-        return _this.getTable(name);
+        return _this[name];
       }
     });
   };
@@ -159,26 +171,70 @@ WebDB.prototype.createTable = function (name, configuration) {
   };
 };
 
-/**
- * Retrieves a table from the database
- */
+WebDB.dbRow = (function () {
+  var _class2 = function (database, row) {
+    _classCallCheck(this, _class2);
 
-WebDB.prototype._getTable = function () {
+    this.database = database;
 
-  var id = this.database._identifyTransaction();
+    return { row: "yes" };
+  };
 
-  this.database._transaction({
-    id: id,
-    statement: "SELECT * FROM " + this.tableName
+  return _class2;
+})();
+
+WebDB.dbTable = (function () {
+  var _class3 = function (database, tableName) {
+    var _this = this;
+
+    _classCallCheck(this, _class3);
+
+    this.database = database;
+    this.tableName = tableName;
+
+    this.rows = [];
+
+    // Retrieve all rows in the table
+    var selectID = this.database._identifyTransaction();
+
+    this.database._transaction({
+      id: selectID,
+      statement: "SELECT * from " + this.tableName
+    });
+
+    this.database._done(selectID, function (status, transaction, result) {
+      if (status === "error") return console.error("Could not retrieve rows for table " + _this.tableName, result);
+
+      var rows = result.rows;
+      var rowCount = 0;
+      while (rowCount < rows.length) {
+        var row = rows.item(rowCount);
+
+        _this.rows.push(new WebDB.dbRow(_this.database, row));
+
+        rowCount = rowCount + 1;
+      }
+    });
+
+    return this;
+  };
+
+  _createClass(_class3, {
+    count: {
+      value: function count() {
+        return this.rows.length;
+      }
+    },
+    remove: {
+      value: function remove() {
+        // This needs to remove the table form the DB!
+        return delete this.database[this.tableName];
+      }
+    },
+    insert: {
+      value: function insert(rowName, configuration) {}
+    }
   });
 
-  this.database._done(id, function (status, transaction, result) {
-    if (status == "error") return console.error("Could not retrieve table " + this.tableNam + " from database", result);
-
-    if (status == "success") return console.log("yay", result);
-  });
-};
-
-WebDB.prototype.getTable = function (name) {
-  return this._getTable.bind({ tableName: name, database: this }).call();
-};
+  return _class3;
+})();
