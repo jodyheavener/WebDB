@@ -79,12 +79,13 @@ let WebDB = class {
         return console.error("WebDB.createTable requires `configuration.columns` configuration")
 
       let columns = [];
+
+      if (!configuration.autoIndexID || (configuration.autoIndexID && configuration.autoIndexID !== false))
+        columns.push("id INTEGER PRIMARY KEY");
+
       Object.keys(configuration.columns).forEach((key) => {
         columns.push(`${key} ${configuration.columns[key].toUpperCase()}`);
       });
-
-      if (configuration.autoIndexID && configuration.autoIndexID !== false)
-        columns.push("_id INTEGER PRIMARY KEY");
 
       let transactionArgs = {
         id: this.identifyTransaction(),
