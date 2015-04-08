@@ -139,13 +139,16 @@ WebDB.prototype.identifyTransaction = function() {
 
 WebDB.prototype.transaction = function(transactionArgs) {
   this.database.transaction((transaction) => {
+    let id = transactionArgs.id;
+    let statement = transactionArgs.statement;
 
-    transaction.executeSql(transactionArgs.statement, [], (transaction, result) => {
-      this.transactions[transactionArgs.id].apply(this, ["success", transaction, result]);
+    transaction.executeSql(statement, [], (transaction, result) => {
+      this.transactions[id].apply(this, ["success", transaction, result]);
+      this.transactions[id] = statement;
     }, (transaction, result) => {
-      this.transactions[transactionArgs.id].apply(this, ["error", transaction, result]);
+      this.transactions[id].apply(this, ["error", transaction, result]);
+      this.transactions[id] = statement;
     });
-
   });
 
   return this;

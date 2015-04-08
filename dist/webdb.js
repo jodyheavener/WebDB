@@ -139,11 +139,15 @@ WebDB.prototype.transaction = function (transactionArgs) {
   var _this = this;
 
   this.database.transaction(function (transaction) {
+    var id = transactionArgs.id;
+    var statement = transactionArgs.statement;
 
-    transaction.executeSql(transactionArgs.statement, [], function (transaction, result) {
-      _this.transactions[transactionArgs.id].apply(_this, ["success", transaction, result]);
+    transaction.executeSql(statement, [], function (transaction, result) {
+      _this.transactions[id].apply(_this, ["success", transaction, result]);
+      _this.transactions[id] = statement;
     }, function (transaction, result) {
-      _this.transactions[transactionArgs.id].apply(_this, ["error", transaction, result]);
+      _this.transactions[id].apply(_this, ["error", transaction, result]);
+      _this.transactions[id] = statement;
     });
   });
 
