@@ -8,7 +8,7 @@ var WebDB = (function () {
   var _class = function WebDB(configuration) {
     _classCallCheck(this, _class);
 
-    var dbcon = {
+    var dbConfiguration = {
       name: undefined,
       version: "1.0",
       description: "",
@@ -21,19 +21,19 @@ var WebDB = (function () {
       case "undefined":
         return console.error("WebDB instance requires configuration");
       case "string":
-        this.databaseName = dbcon.name = configuration;
+        this.databaseName = dbConfiguration.name = configuration;
         break;
       case "object":
         if (!configuration.name) {
           return console.error("WebDB instance requires `name` configuration");
-        }this.databaseName = dbcon.name = configuration.name;
-        if (configuration.version) dbcon.version = configuration.version;
-        if (configuration.description) dbcon.description = configuration.description;
-        if (configuration.initialize) dbcon.initialize = configuration.initialize;
+        }this.databaseName = dbConfiguration.name = configuration.name;
+        if (configuration.version) dbConfiguration.version = configuration.version;
+        if (configuration.description) dbConfiguration.description = configuration.description;
+        if (configuration.initialize) dbConfiguration.initialize = configuration.initialize;
         break;
     };
 
-    this.database = openDatabase(dbcon.name, dbcon.version, dbcon.description, 2 * 1024 * 1024, dbcon.initialize);
+    this.database = openDatabase(dbConfiguration.name, dbConfiguration.version, dbConfiguration.description, 2 * 1024 * 1024, dbConfiguration.initialize);
 
     this.getTables();
 
@@ -50,14 +50,14 @@ var WebDB = (function () {
       value: function getTables() {
         var _this = this;
 
-        var id = this.identifyTransaction();
+        var transactionArgs = {
+          id: this.identifyTransaction(),
+          statement: this.sanitizeStatement("\n        SELECT tbl_name, sql\n        FROM sqlite_master\n        WHERE type='table'\n      ")
+        };
 
-        this.transaction({
-          id: id,
-          statement: "SELECT tbl_name, sql from sqlite_master WHERE type='table'"
-        });
+        this.transaction(transactionArgs);
 
-        this.done(id, function (status, transaction, result) {
+        this.done(transactionArgs.id, function (status, transaction, result) {
           if (status === "error") return console.error("Could not retrieve existing tables from database", result);
 
           var tables = result.rows;
@@ -66,7 +66,7 @@ var WebDB = (function () {
             var table = tables.item(tableCount);
             var _name = table.tbl_name;
 
-            if (_name !== "__WebKitDatabaseInfoTable__" && !_this[_name]) _this[_name] = new WebDB.dbTable(_this, _name);
+            if (_name !== "__WebKitDatabaseInfoTable__" && !_this[_name]) _this[_name] = new WebDB.Table(_this, _name);
 
             tableCount = tableCount + 1;
           };
@@ -90,18 +90,14 @@ var WebDB = (function () {
 
           if (configuration.autoIndexID && configuration.autoIndexID !== false) columns.push("_id INTEGER PRIMARY KEY");
 
-          var txConfig = {
+          var transactionArgs = {
             id: _this.identifyTransaction(),
-            statement: "\n          CREATE TABLE IF NOT EXISTS\n          " + name + "\n          (" + columns.join(",") + ")\n        "
+            statement: _this.sanitizeStatement("\n          CREATE TABLE IF NOT EXISTS\n          " + name + "\n          (" + columns.join(",") + ")\n        ")
           };
 
-          txConfig.statement = txConfig.statement.replace(/\n/g, " ") // Replace line breaks with spaces
-          .replace(/\s{2,}/g, " ") // Replace multiple spaces with single space
-          .replace(/^ | $/g, ""); // Remove first and last space in query
+          _this.transaction(transactionArgs);
 
-          _this.transaction(txConfig);
-
-          _this.done(txConfig.id, function (status, transaction, result) {
+          _this.done(transactionArgs.id, function (status, transaction, result) {
             if (status === "error" && configuration.error != null) return configuration.error(result);
 
             if (status === "success") {
@@ -113,14 +109,14 @@ var WebDB = (function () {
         };
 
         if (configuration.overwrite) {
-          var id = this.identifyTransaction();
+          var transactionArgs = {
+            id: this.identifyTransaction(),
+            statement: this.sanitizeStatement("\n          DROP TABLE IF EXISTS " + name + "\n        ")
+          };
 
-          this.transaction({
-            id: id,
-            statement: "DROP TABLE IF EXISTS ${name}"
-          });
+          this.transaction(transactionArgs);
 
-          this.done(dropID, createTable);
+          this.done(transactionArgs.id, createTable);
         } else {
           createTable();
         };
@@ -139,15 +135,15 @@ WebDB.prototype.identifyTransaction = function () {
   return this.transactionIdentifier = this.transactionIdentifier + 1;
 };
 
-WebDB.prototype.transaction = function (txConfig) {
+WebDB.prototype.transaction = function (transactionArgs) {
   var _this = this;
 
   this.database.transaction(function (transaction) {
 
-    transaction.executeSql(txConfig.statement, [], function (transaction, result) {
-      _this.transactions[txConfig.id].apply(_this, ["success", transaction, result]);
+    transaction.executeSql(transactionArgs.statement, [], function (transaction, result) {
+      _this.transactions[transactionArgs.id].apply(_this, ["success", transaction, result]);
     }, function (transaction, result) {
-      _this.transactions[txConfig.id].apply(_this, ["error", transaction, result]);
+      _this.transactions[transactionArgs.id].apply(_this, ["error", transaction, result]);
     });
   });
 
@@ -158,19 +154,32 @@ WebDB.prototype.done = function (id, callback) {
   return this.transactions[id] = callback;
 };
 
-WebDB.dbRow = (function () {
-  var _class2 = function (database, row) {
+WebDB.prototype.sanitizeStatement = function (statement) {
+  statement = statement.replace(/\n/g, " ") // Replace line breaks with spaces
+  .replace(/\s{2,}/g, " ") // Replace multiple spaces with single space
+  .replace(/^ | $/g, ""); // Remove first and last space in query
+  return statement;
+};
+
+WebDB.Row = (function () {
+  var _class2 = function (database, rowData) {
+    var _this = this;
+
     _classCallCheck(this, _class2);
 
     this.database = database;
 
-    return { row: "yes" };
+    Object.keys(rowData).forEach(function (dataItem) {
+      _this[dataItem] = rowData[dataItem];
+    });
+
+    return this;
   };
 
   return _class2;
 })();
 
-WebDB.dbTable = (function () {
+WebDB.Table = (function () {
   var _class3 = function (database, tableName) {
     var _this = this;
 
@@ -182,25 +191,17 @@ WebDB.dbTable = (function () {
     this.rows = [];
 
     // Retrieve all rows in the table
-    var selectID = this.database.identifyTransaction();
+    var transactionArgs = {
+      id: this.database.identifyTransaction(),
+      statement: this.database.sanitizeStatement("\n        SELECT *\n        FROM " + this.tableName + "\n      ")
+    };
 
-    this.database.transaction({
-      id: selectID,
-      statement: "SELECT * from " + this.tableName
-    });
+    this.database.transaction(transactionArgs);
 
-    this.database.done(selectID, function (status, transaction, result) {
+    this.database.done(transactionArgs.id, function (status, transaction, result) {
       if (status === "error") return console.error("Could not retrieve rows for table " + _this.tableName, result);
 
-      var rows = result.rows;
-      var rowCount = 0;
-      while (rowCount < rows.length) {
-        var row = rows.item(rowCount);
-
-        _this.rows.push(new WebDB.dbRow(_this.database, row));
-
-        rowCount = rowCount + 1;
-      };
+      _this.setupRows(result.rows);
     });
 
     return this;
@@ -212,18 +213,23 @@ WebDB.dbTable = (function () {
         return this.rows.length;
       }
     },
+    get: {
+      value: function get(index) {
+        return this.rows[index];
+      }
+    },
     drop: {
       value: function drop() {
         var _this = this;
 
-        var dropID = this.database.identifyTransaction();
+        var transactionArgs = {
+          id: this.database.identifyTransaction(),
+          statement: this.database.sanitizeStatement("\n        DROP TABLE " + this.tableName + "\n      ")
+        };
 
-        this.database.transaction({
-          id: dropID,
-          statement: "DROP TABLE " + this.tableName
-        });
+        this.database.transaction(transactionArgs);
 
-        this.database.done(dropID, function (status, transaction, result) {
+        this.database.done(transactionArgs.id, function (status, transaction, result) {
           if (status === "error") return console.error("Could not drop table " + _this.tableName, result);
 
           return delete _this.database[_this.tableName];
@@ -232,18 +238,44 @@ WebDB.dbTable = (function () {
     },
     insert: {
 
-      /* rowName can also be an object with {rowName: configuration} */
+      /* `rows` can be an object, or an array of objects */
 
-      value: function insert(rowName, configuration) {
-        var rowItems = {};
+      value: function insert(rows) {
+        var _this = this;
 
-        if (typeof rowName === "string" && configuration != null) {
-          rowItems[rowName] = configuration;
-        } else if (typeof rowName === "object") {
-          rowItems = rowName;
+        var rowItems = [];
+
+        if (Object.prototype.toString.call(rows) === "[object Array]") {
+          rowItems = rows;
+        } else if (typeof rows === "object") {
+          rowItems.push(rows);
         };
 
-        console.log(rowItems);
+        rowItems.forEach(function (rowItem) {
+          var keys = [],
+              values = [],
+              statement = undefined;
+
+          Object.keys(rowItem).forEach(function (key) {
+            keys.push(key);
+            values.push("\"" + rowItem[key] + "\"");
+          });
+
+          var transactionArgs = {
+            id: _this.database.identifyTransaction(),
+            statement: _this.database.sanitizeStatement("\n          INSERT INTO " + _this.tableName + "\n          (" + keys.join(",") + ") VALUES\n          (" + values.join(",") + ")\n        ")
+          };
+
+          _this.database.transaction(transactionArgs);
+
+          _this.database.done(transactionArgs.id, function (status, transaction, result) {
+            if (status === "error") return console.error("Could not insert row in to table " + _this.tableName, result);
+
+            _this.setupRows(result.rows);
+          });
+        });
+
+        return this;
       }
     },
     remove: {
@@ -253,3 +285,15 @@ WebDB.dbTable = (function () {
 
   return _class3;
 })();
+
+WebDB.Table.prototype.setupRows = function (rows) {
+  var rowCount = 0;
+
+  while (rowCount < rows.length) {
+    var rowData = rows.item(rowCount);
+
+    this.rows.push(new WebDB.Row(this.database, rowData));
+
+    rowCount = rowCount + 1;
+  };
+};

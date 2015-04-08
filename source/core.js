@@ -1,7 +1,7 @@
 let WebDB = class {
 
   constructor(configuration) {
-    var dbcon = {
+    var dbConfiguration = {
       name: undefined,
       version: "1.0",
       description: "",
@@ -14,22 +14,22 @@ let WebDB = class {
       case "undefined":
         return console.error("WebDB instance requires configuration");
       case "string":
-        this.databaseName = dbcon.name = configuration;
+        this.databaseName = dbConfiguration.name = configuration;
         break;
       case "object":
         if (!configuration.name)
           return console.error("WebDB instance requires `name` configuration");
-        this.databaseName = dbcon.name = configuration.name;
+        this.databaseName = dbConfiguration.name = configuration.name;
         if (configuration.version)
-          dbcon.version = configuration.version;
+          dbConfiguration.version = configuration.version;
         if (configuration.description)
-          dbcon.description = configuration.description;
+          dbConfiguration.description = configuration.description;
         if (configuration.initialize)
-          dbcon.initialize = configuration.initialize;
+          dbConfiguration.initialize = configuration.initialize;
         break;
     };
 
-    this.database = openDatabase(dbcon.name, dbcon.version, dbcon.description, 2 * 1024 * 1024, dbcon.initialize);
+    this.database = openDatabase(dbConfiguration.name, dbConfiguration.version, dbConfiguration.description, 2 * 1024 * 1024, dbConfiguration.initialize);
 
     this.getTables();
 
@@ -38,17 +38,21 @@ let WebDB = class {
 
   getName() {
     return this.databaseName;
-  }
+  };
 
   getTables() {
-    let id = this.identifyTransaction();
+    let transactionArgs = {
+      id: this.identifyTransaction(),
+      statement: this.sanitizeStatement(`
+        SELECT tbl_name, sql
+        FROM sqlite_master
+        WHERE type='table'
+      `)
+    };
 
-    this.transaction({
-      id: id,
-      statement: `SELECT tbl_name, sql from sqlite_master WHERE type='table'`
-    });
+    this.transaction(transactionArgs);
 
-    this.done(id, (status, transaction, result) => {
+    this.done(transactionArgs.id, (status, transaction, result) => {
       if (status === "error")
         return console.error("Could not retrieve existing tables from database", result);
 
@@ -82,23 +86,18 @@ let WebDB = class {
       if (configuration.autoIndexID && configuration.autoIndexID !== false)
         columns.push("_id INTEGER PRIMARY KEY");
 
-      let txConfig = {
+      let transactionArgs = {
         id: this.identifyTransaction(),
-        statement: `
+        statement: this.sanitizeStatement(`
           CREATE TABLE IF NOT EXISTS
           ${name}
           (${columns.join(",")})
-        `
+        `)
       };
 
-      txConfig.statement = txConfig.statement
-        .replace(/\n/g, " ")     // Replace line breaks with spaces
-        .replace(/\s{2,}/g, " ") // Replace multiple spaces with single space
-        .replace(/^ | $/g, "");  // Remove first and last space in query
+      this.transaction(transactionArgs);
 
-      this.transaction(txConfig);
-
-      this.done(txConfig.id, (status, transaction, result) => {
+      this.done(transactionArgs.id, (status, transaction, result) => {
         if (status === "error" && configuration.error != null)
           return configuration.error(result);
 
@@ -113,14 +112,16 @@ let WebDB = class {
     };
 
     if (configuration.overwrite) {
-      let id = this.identifyTransaction();
+      let transactionArgs = {
+        id: this.identifyTransaction(),
+        statement: this.sanitizeStatement(`
+          DROP TABLE IF EXISTS ${name}
+        `)
+      };
 
-      this.transaction({
-        id: id,
-        statement: "DROP TABLE IF EXISTS ${name}"
-      });
+      this.transaction(transactionArgs);
 
-      this.done(dropID, createTable);
+      this.done(transactionArgs.id, createTable);
     } else {
       createTable();
     };
@@ -136,13 +137,13 @@ WebDB.prototype.identifyTransaction = function() {
   return this.transactionIdentifier = this.transactionIdentifier + 1;
 };
 
-WebDB.prototype.transaction = function(txConfig) {
+WebDB.prototype.transaction = function(transactionArgs) {
   this.database.transaction((transaction) => {
 
-    transaction.executeSql(txConfig.statement, [], (transaction, result) => {
-      this.transactions[txConfig.id].apply(this, ["success", transaction, result]);
+    transaction.executeSql(transactionArgs.statement, [], (transaction, result) => {
+      this.transactions[transactionArgs.id].apply(this, ["success", transaction, result]);
     }, (transaction, result) => {
-      this.transactions[txConfig.id].apply(this, ["error", transaction, result]);
+      this.transactions[transactionArgs.id].apply(this, ["error", transaction, result]);
     });
 
   });
@@ -153,3 +154,12 @@ WebDB.prototype.transaction = function(txConfig) {
 WebDB.prototype.done = function(id, callback) {
   return this.transactions[id] = callback;
 };
+
+WebDB.prototype.sanitizeStatement = function(statement) {
+  statement = statement
+    .replace(/\n/g, " ")     // Replace line breaks with spaces
+    .replace(/\s{2,}/g, " ") // Replace multiple spaces with single space
+    .replace(/^ | $/g, "");  // Remove first and last space in query
+  return statement;
+};
+

@@ -2,7 +2,7 @@
 
 A library that tries to apply a Mongo DB approach to interacting with Web SQL Databases.
 
-**Note:**: at this point I'm not sure if I want to finish this. It seems trivial trying to make Web DB work like Mongo.
+**Note:** at this point I'm not sure if I want to finish this. It seems trivial trying to make Web DB work like Mongo, and the Web SQL spec is dead... so.. we'll see.
 
 ## WebDB(configuration)
 Instantiate the WebDB class with either a configuration object, or just the string name of the database.
@@ -51,13 +51,14 @@ myDB.createTable("someKindaTable", {
 ```
 
 ### Other
-The follow methods and members are available, though they are meant to be internal.
+The following methods and members are available, though they are meant to be internal.
 
 * `transactions` – Object containing a history of database transactions
 * `transactionIdentifier` – Number used in conjuction with `transactions` and `done()` to identifying the current transaction
 * `identifyTransaction()` – Increments `transactionIdentifier` and returns the current ID number
 * `transaction(txConfig)` – Performs a single database transaction with parameters
 * `done(id, callback)` - Assigns a function to the `transactions` object by ID number
+* `sanitizeStatement(statement)` – Sanitizes a database statement; useful for when creating statements using ES6 template strings
 
 ## WebDB.Table(database, tableName)
 Instantiate the WebDB.Table class by Table Name with a copy of the WebDB instance. Table must exist in the database.
@@ -72,18 +73,44 @@ this[name] = new WebDB.Table(this, name);
 ### count()
 Returns the number of rows that exist within the table
 
+### get(index)
+Retrieves a row by index value
+
 ### drop()
 Drops (deletes) the current table from the database, as well as the current WebDB instance object
 
-### insert(rowName, configuration)
+### insert(rows)
 Inserts a new row in to the table.
 
-_Not complete_
+`rows` can be either an object or an array of objects containing `column: value`s.
+
+```javascript
+myDB.myTestTable.insert({
+  name: "this name",
+  count: 3
+});
+
+// or
+myDB.myTestTable.insert([
+  {
+    name: "this name",
+    count: 3
+  }, {
+    name: "that name",
+    count: 10
+  }
+]);
+```
 
 ### remove(query, justOne)
 Removes a row from the table.
 
 _Not complete_
+
+### Other
+The following methods and members are available, though they are meant to be internal.
+
+* `setupRows(rows)` – Takes a set of rows and instantiates new `WebDB.Row`s with them. Called when constructing the WebDB.Table instance and when inserting new rows.
 
 ## WebDB.Row(database, rowQuery)
 Instantiate the WebDB.Row class by Row Query with a copy of the WebDB instance. Table must exist in the database.

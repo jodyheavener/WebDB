@@ -1,9 +1,13 @@
 WebDB.Row = class {
 
-  constructor(database, rowQuery) {
+  constructor(database, rowData) {
     this.database = database;
 
-    return {row: "yes"};
-  }
+    Object.keys(rowData).forEach((dataItem) => {
+      this[dataItem] = rowData[dataItem];
+    });
+
+    return this;
+  };
 
 };

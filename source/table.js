@@ -7,26 +7,21 @@ WebDB.Table = class {
     this.rows = [];
 
     // Retrieve all rows in the table
-    let selectID = this.database.identifyTransaction();
+    let transactionArgs = {
+      id: this.database.identifyTransaction(),
+      statement: this.database.sanitizeStatement(`
+        SELECT *
+        FROM ${this.tableName}
+      `)
+    };
 
-    this.database.transaction({
-      id: selectID,
-      statement: `SELECT * from ${this.tableName}`
-    });
+    this.database.transaction(transactionArgs);
 
-    this.database.done(selectID, (status, transaction, result) => {
+    this.database.done(transactionArgs.id, (status, transaction, result) => {
       if (status === "error")
         return console.error(`Could not retrieve rows for table ${this.tableName}`, result);
 
-      let rows = result.rows;
-      let rowCount = 0;
-      while (rowCount < rows.length) {
-        let row = rows.item(rowCount);
-
-        this.rows.push(new WebDB.Row(this.database, row));
-
-        rowCount = rowCount + 1;
-      };
+      this.setupRows(result.rows);
     });
 
     return this;
@@ -36,37 +31,84 @@ WebDB.Table = class {
     return this.rows.length;
   };
 
+  get(index) {
+    return this.rows[index];
+  };
+
   drop() {
-    let dropID = this.database.identifyTransaction();
+    let transactionArgs = {
+      id: this.database.identifyTransaction(),
+      statement: this.database.sanitizeStatement(`
+        DROP TABLE ${this.tableName}
+      `)
+    };
 
-    this.database.transaction({
-      id: dropID,
-      statement: `DROP TABLE ${this.tableName}`
-    });
+    this.database.transaction(transactionArgs);
 
-    this.database.done(dropID, (status, transaction, result) => {
+    this.database.done(transactionArgs.id, (status, transaction, result) => {
       if (status === "error")
         return console.error(`Could not drop table ${this.tableName}`, result);
 
       return delete this.database[this.tableName];
     });
-  }
+  };
 
-  /* rowName can also be an object with {rowName: configuration} */
-  insert(rowName, configuration) {
-    let rowItems = {};
+  /* `rows` can be an object, or an array of objects */
+  insert(rows) {
+    let rowItems = [];
 
-    if (typeof rowName === "string" && configuration != null) {
-      rowItems[rowName] = configuration;
-    } else if (typeof rowName === "object") {
-      rowItems = rowName;
+    if (Object.prototype.toString.call(rows) === "[object Array]") {
+      rowItems = rows;
+    } else if (typeof rows === "object") {
+      rowItems.push(rows);
     };
 
-    console.log(rowItems);
+    rowItems.forEach((rowItem) => {
+      let keys = [],
+          values = [],
+          statement;
+
+      Object.keys(rowItem).forEach(key => {
+        keys.push(key);
+        values.push("\"" + rowItem[key] + "\"");
+      });
+
+      let transactionArgs = {
+        id: this.database.identifyTransaction(),
+        statement: this.database.sanitizeStatement(`
+          INSERT INTO ${this.tableName}
+          (${keys.join(",")}) VALUES
+          (${values.join(",")})
+        `)
+      };
+
+      this.database.transaction(transactionArgs);
+
+      this.database.done(transactionArgs.id, (status, transaction, result) => {
+        if (status === "error")
+          return console.error(`Could not insert row in to table ${this.tableName}`, result);
+
+        this.setupRows(result.rows);
+      });
+    });
+
+    return this;
   };
 
   remove(query, justOne) {
 
   };
 
+};
+
+WebDB.Table.prototype.setupRows = function(rows) {
+  let rowCount = 0;
+
+  while (rowCount < rows.length) {
+    let rowData = rows.item(rowCount);
+
+    this.rows.push(new WebDB.Row(this.database, rowData));
+
+    rowCount = rowCount + 1;
+  };
 };
