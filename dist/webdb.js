@@ -58,7 +58,7 @@ var WebDB = (function () {
         this.transaction(transactionArgs);
 
         this.done(transactionArgs.id, function (status, transaction, result) {
-          if (status === "error") return console.error("Could not retrieve existing tables from database", result);
+          if (status === "error") return console.error("Couldn't retrieve tables from database", result);
 
           var tables = result.rows;
           var tableCount = 0;
@@ -81,7 +81,7 @@ var WebDB = (function () {
 
         var createTable = function () {
 
-          if (configuration.columns == null) return console.error("WebDB.createTable requires `configuration.columns` configuration");
+          if (configuration.columns == null) return console.error("WebDB.createTable requires `configuration.columns`");
 
           var columns = [];
 
@@ -204,7 +204,7 @@ WebDB.Table = (function () {
     this.database.transaction(transactionArgs);
 
     this.database.done(transactionArgs.id, function (status, transaction, result) {
-      if (status === "error") return console.error("Could not retrieve rows for table " + _this.tableName, result);
+      if (status === "error") return console.error("Couldn't retrieve rows for table " + _this.tableName, result);
 
       _this.setupRows(result.rows);
     });

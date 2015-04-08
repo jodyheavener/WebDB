@@ -19,7 +19,7 @@ WebDB.Table = class {
 
     this.database.done(transactionArgs.id, (status, transaction, result) => {
       if (status === "error")
-        return console.error(`Could not retrieve rows for table ${this.tableName}`, result);
+        return console.error(`Couldn't retrieve rows for table ${this.tableName}`, result);
 
       this.setupRows(result.rows);
     });

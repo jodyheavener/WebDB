@@ -29,7 +29,13 @@ let WebDB = class {
         break;
     };
 
-    this.database = openDatabase(dbConfiguration.name, dbConfiguration.version, dbConfiguration.description, 2 * 1024 * 1024, dbConfiguration.initialize);
+    this.database = openDatabase(
+      dbConfiguration.name,
+      dbConfiguration.version,
+      dbConfiguration.description,
+      2 * 1024 * 1024,
+      dbConfiguration.initialize
+    );
 
     this.getTables();
 
@@ -54,7 +60,7 @@ let WebDB = class {
 
     this.done(transactionArgs.id, (status, transaction, result) => {
       if (status === "error")
-        return console.error("Could not retrieve existing tables from database", result);
+        return console.error("Couldn't retrieve tables from database", result);
 
       let tables = result.rows;
       let tableCount = 0;
@@ -76,11 +82,12 @@ let WebDB = class {
     let createTable = () => {
 
       if (configuration.columns == null)
-        return console.error("WebDB.createTable requires `configuration.columns` configuration")
+        return console.error("WebDB.createTable requires `configuration.columns`")
 
       let columns = [];
 
-      if (!configuration.autoIndexID || (configuration.autoIndexID && configuration.autoIndexID !== false))
+      if (!configuration.autoIndexID ||
+         (configuration.autoIndexID && configuration.autoIndexID !== false))
         columns.push("id INTEGER PRIMARY KEY");
 
       Object.keys(configuration.columns).forEach((key) => {
