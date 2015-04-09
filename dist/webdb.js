@@ -6,6 +6,8 @@ var _classCallCheck = function (instance, Constructor) { if (!(instance instance
 
 var WebDB = (function () {
   var _class = function WebDB(configuration) {
+    var _this = this;
+
     _classCallCheck(this, _class);
 
     var dbConfiguration = {
@@ -37,7 +39,12 @@ var WebDB = (function () {
 
     this.getTables();
 
-    return this.ready = true;
+    // How do I make this work????!?!?!
+    setTimeout(function () {
+      _this.trigger("ready");
+    }, 0);
+
+    return this;
   };
 
   _createClass(_class, {
@@ -57,10 +64,10 @@ var WebDB = (function () {
 
         this.transaction(transactionArgs);
 
-        this.done(transactionArgs.id, function (status, transaction, result) {
-          if (status === "error") return console.error("Couldn't retrieve tables from database", result);
+        this.on(transactionArgs.id, function (data) {
+          if (data.status === "error") return console.error("Couldn't retrieve tables from database", data.result);
 
-          var tables = result.rows;
+          var tables = data.result.rows;
           var tableCount = 0;
           while (tableCount < tables.length) {
             var table = tables.item(tableCount);
@@ -70,7 +77,7 @@ var WebDB = (function () {
 
             tableCount = tableCount + 1;
           };
-        });
+        }, true);
 
         return this;
       }
@@ -98,15 +105,15 @@ var WebDB = (function () {
 
           _this.transaction(transactionArgs);
 
-          _this.done(transactionArgs.id, function (status, transaction, result) {
-            if (status === "error" && configuration.error != null) return configuration.error(result);
+          _this.on(transactionArgs.id, function (data) {
+            if (data.status === "error" && configuration.error != null) return configuration.error(data.result);
 
             if (status === "success") {
               _this.getTables();
-              if (configuration.success != null) configuration.success(result);
+              if (configuration.success != null) configuration.success(data.result);
               return _this[name];
             };
-          });
+          }, true);
         };
 
         if (configuration.overwrite) {
@@ -117,16 +124,20 @@ var WebDB = (function () {
 
           this.transaction(transactionArgs);
 
-          this.done(transactionArgs.id, createTable);
+          this.on(transactionArgs.id, createTable, true);
         } else {
           createTable();
         };
+
+        return this;
       }
     }
   });
 
   return _class;
 })();
+
+WebDB.prototype.events = {};
 
 WebDB.prototype.transactions = {};
 
@@ -144,19 +155,41 @@ WebDB.prototype.transaction = function (transactionArgs) {
     var statement = transactionArgs.statement;
 
     transaction.executeSql(statement, [], function (transaction, result) {
-      _this.transactions[id].apply(_this, ["success", transaction, result]);
-      _this.transactions[id] = statement;
+      _this.trigger(id, {
+        status: "success",
+        transaction: transaction,
+        result: result
+      }, true, statement);
     }, function (transaction, result) {
-      _this.transactions[id].apply(_this, ["error", transaction, result]);
-      _this.transactions[id] = statement;
+      _this.trigger(id, {
+        status: "error",
+        transaction: transaction,
+        result: result
+      }, true, statement);
     });
   });
 
   return this;
 };
 
-WebDB.prototype.done = function (id, callback) {
-  return this.transactions[id] = callback;
+WebDB.prototype.on = function (eventOrID, callback, isTransaction) {
+  var eventSet = isTransaction ? this.transactions : this.events;
+
+  eventSet[eventOrID] = callback;
+
+  return this;
+};
+
+WebDB.prototype.trigger = function (eventOrID, data, isTransaction, statement) {
+  var eventSet = isTransaction ? this.transactions : this.events;
+
+  if (eventSet[eventOrID]) {
+    eventSet[eventOrID].call(this, data);
+
+    if (isTransaction && statement) this.transactions[eventOrID] = statement;
+  };
+
+  return this;
 };
 
 WebDB.prototype.sanitizeStatement = function (statement) {
@@ -203,11 +236,11 @@ WebDB.Table = (function () {
 
     this.database.transaction(transactionArgs);
 
-    this.database.done(transactionArgs.id, function (status, transaction, result) {
-      if (status === "error") return console.error("Couldn't retrieve rows for table " + _this.tableName, result);
+    this.database.on(transactionArgs.id, function (data) {
+      if (data.status === "error") return console.error("Couldn't retrieve rows for table " + _this.tableName, data.result);
 
-      _this.setupRows(result.rows);
-    });
+      _this.setupRows(data.result.rows);
+    }, true);
 
     return this;
   };
@@ -234,11 +267,11 @@ WebDB.Table = (function () {
 
         this.database.transaction(transactionArgs);
 
-        this.database.done(transactionArgs.id, function (status, transaction, result) {
-          if (status === "error") return console.error("Could not drop table " + _this.tableName, result);
+        this.database.on(transactionArgs.id, function (data) {
+          if (data.status === "error") return console.error("Could not drop table " + _this.tableName, data.result);
 
           return delete _this.database[_this.tableName];
-        });
+        }, true);
       }
     },
     insert: {
@@ -273,11 +306,11 @@ WebDB.Table = (function () {
 
           _this.database.transaction(transactionArgs);
 
-          _this.database.done(transactionArgs.id, function (status, transaction, result) {
-            if (status === "error") return console.error("Could not insert row in to table " + _this.tableName, result);
+          _this.database.on(transactionArgs.id, function (data) {
+            if (data.status === "error") return console.error("Could not insert row in to table " + _this.tableName, data.result);
 
-            _this.setupRows(result.rows);
-          });
+            _this.setupRows(data.result.rows);
+          }, true);
         });
 
         return this;

@@ -53,12 +53,16 @@ myDB.createTable("someKindaTable", {
 ### Other
 The following methods and members are available, though they are meant to be internal.
 
-* `transactions` – Object containing a history of database transactions
-* `transactionIdentifier` – Number used in conjuction with `transactions` and `done()` to identifying the current transaction
+* `events` - Object to assign events and their callback
+* `transactions` – Similar to `events`, but containing a history of database transactions
+* `transactionIdentifier` – Number used in conjuction with `transactions` and `on()` to identifying the current transaction
 * `identifyTransaction()` – Increments `transactionIdentifier` and returns the current ID number
 * `transaction(txConfig)` – Performs a single database transaction with parameters
-* `done(id, callback)` - Assigns a function to the `transactions` object by ID number
+* `on(eventOrID, callback, isTransaction)` - Registers a function with an event name in the `events` object. If `isTransaction` is true, registers the function to the `transactions` object with a transaction ID number
+* `trigger(eventOrID, data, isTransaction, statement) - Triggers an event or transaction completion by event name or ID number. if `isTransaction` and `statement` is set, will set the value in the transaction object as the SQL statement.
 * `sanitizeStatement(statement)` – Sanitizes a database statement; useful for when creating statements using ES6 template strings
+
+Eventually `on()` and `trigger()` are going to be designed for public usage.
 
 ## WebDB.Table(database, tableName)
 Instantiate the WebDB.Table class by Table Name with a copy of the WebDB instance. Table must exist in the database.

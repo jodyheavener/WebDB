@@ -17,12 +17,12 @@ WebDB.Table = class {
 
     this.database.transaction(transactionArgs);
 
-    this.database.done(transactionArgs.id, (status, transaction, result) => {
-      if (status === "error")
-        return console.error(`Couldn't retrieve rows for table ${this.tableName}`, result);
+    this.database.on(transactionArgs.id, (data) => {
+      if (data.status === "error")
+        return console.error(`Couldn't retrieve rows for table ${this.tableName}`, data.result);
 
-      this.setupRows(result.rows);
-    });
+      this.setupRows(data.result.rows);
+    }, true);
 
     return this;
   };
@@ -45,12 +45,12 @@ WebDB.Table = class {
 
     this.database.transaction(transactionArgs);
 
-    this.database.done(transactionArgs.id, (status, transaction, result) => {
-      if (status === "error")
-        return console.error(`Could not drop table ${this.tableName}`, result);
+    this.database.on(transactionArgs.id, (data) => {
+      if (data.status === "error")
+        return console.error(`Could not drop table ${this.tableName}`, data.result);
 
       return delete this.database[this.tableName];
-    });
+    }, true);
   };
 
   /* `rows` can be an object, or an array of objects */
@@ -84,12 +84,12 @@ WebDB.Table = class {
 
       this.database.transaction(transactionArgs);
 
-      this.database.done(transactionArgs.id, (status, transaction, result) => {
-        if (status === "error")
-          return console.error(`Could not insert row in to table ${this.tableName}`, result);
+      this.database.on(transactionArgs.id, (data) => {
+        if (data.status === "error")
+          return console.error(`Could not insert row in to table ${this.tableName}`, data.result);
 
-        this.setupRows(result.rows);
-      });
+        this.setupRows(data.result.rows);
+      }, true);
     });
 
     return this;

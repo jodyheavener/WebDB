@@ -39,7 +39,10 @@ let WebDB = class {
 
     this.getTables();
 
-    return this.ready = true;
+    // How do I make this work????!?!?!
+    setTimeout(() => { this.trigger("ready"); }, 0);
+
+    return this;
   };
 
   getName() {
@@ -58,11 +61,11 @@ let WebDB = class {
 
     this.transaction(transactionArgs);
 
-    this.done(transactionArgs.id, (status, transaction, result) => {
-      if (status === "error")
-        return console.error("Couldn't retrieve tables from database", result);
+    this.on(transactionArgs.id, (data) => {
+      if (data.status === "error")
+        return console.error("Couldn't retrieve tables from database", data.result);
 
-      let tables = result.rows;
+      let tables = data.result.rows;
       let tableCount = 0;
       while (tableCount < tables.length) {
         let table = tables.item(tableCount);
@@ -73,7 +76,7 @@ let WebDB = class {
 
         tableCount = tableCount + 1;
       };
-    });
+    }, true);
 
     return this;
   };
@@ -105,17 +108,17 @@ let WebDB = class {
 
       this.transaction(transactionArgs);
 
-      this.done(transactionArgs.id, (status, transaction, result) => {
-        if (status === "error" && configuration.error != null)
-          return configuration.error(result);
+      this.on(transactionArgs.id, (data) => {
+        if (data.status === "error" && configuration.error != null)
+          return configuration.error(data.result);
 
         if (status === "success") {
           this.getTables();
           if (configuration.success != null)
-            configuration.success(result);
+            configuration.success(data.result);
           return this[name];
         };
-      });
+      }, true);
 
     };
 
@@ -129,13 +132,17 @@ let WebDB = class {
 
       this.transaction(transactionArgs);
 
-      this.done(transactionArgs.id, createTable);
+      this.on(transactionArgs.id, createTable, true);
     } else {
       createTable();
     };
+
+    return this;
   };
 
 };
+
+WebDB.prototype.events = {};
 
 WebDB.prototype.transactions = {};
 
@@ -151,19 +158,42 @@ WebDB.prototype.transaction = function(transactionArgs) {
     let statement = transactionArgs.statement;
 
     transaction.executeSql(statement, [], (transaction, result) => {
-      this.transactions[id].apply(this, ["success", transaction, result]);
-      this.transactions[id] = statement;
+      this.trigger(id, {
+        status: "success",
+        transaction: transaction,
+        result: result
+      }, true, statement);
     }, (transaction, result) => {
-      this.transactions[id].apply(this, ["error", transaction, result]);
-      this.transactions[id] = statement;
+      this.trigger(id, {
+        status: "error",
+        transaction: transaction,
+        result: result
+      }, true, statement);
     });
   });
 
   return this;
 };
 
-WebDB.prototype.done = function(id, callback) {
-  return this.transactions[id] = callback;
+WebDB.prototype.on = function(eventOrID, callback, isTransaction) {
+  let eventSet = isTransaction ? this.transactions : this.events;
+
+  eventSet[eventOrID] = callback;
+
+  return this;
+};
+
+WebDB.prototype.trigger = function(eventOrID, data, isTransaction, statement) {
+  let eventSet = isTransaction ? this.transactions : this.events;
+
+  if (eventSet[eventOrID]) {
+    eventSet[eventOrID].call(this, data);
+
+    if (isTransaction && statement)
+      this.transactions[eventOrID] = statement;
+  };
+
+  return this;
 };
 
 WebDB.prototype.sanitizeStatement = function(statement) {
